@@ -10,5 +10,5 @@ import (
 
 func TestAnalyzer(t *testing.T) {
 	t.Parallel()
-	analysistest.Run(t, analysistest.TestData(), duperr.Analyzer, "a", "b")
+	analysistest.Run(t, analysistest.TestData(), duperr.Analyzer, "a", "b", "c")
 }
