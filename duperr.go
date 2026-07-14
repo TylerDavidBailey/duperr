@@ -27,7 +27,7 @@ import (
 //
 // fmt.Errorf format strings containing verbs other than %w are skipped:
 // their dynamic arguments already make the resulting messages distinct.
-// Files ending in _test.go are ignored.
+// Files ending in _test.go and generated files are ignored.
 //
 //nolint:gochecknoglobals // analyzers are exported as package-level vars by convention
 var Analyzer = &analysis.Analyzer{
@@ -47,14 +47,21 @@ func run(pass *analysis.Pass) (any, error) {
 
 	occurrences := map[string][]token.Pos{}
 
-	insp.Preorder([]ast.Node{(*ast.CallExpr)(nil)}, func(n ast.Node) {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return
+	nodeFilter := []ast.Node{(*ast.File)(nil), (*ast.CallExpr)(nil)}
+	insp.Nodes(nodeFilter, func(n ast.Node, push bool) bool {
+		if !push {
+			return false
 		}
-		if msg, ok := constantMessage(pass, call); ok {
-			occurrences[msg] = append(occurrences[msg], call.Pos())
+		switch n := n.(type) {
+		case *ast.File:
+			filename := pass.Fset.Position(n.Pos()).Filename
+			return !strings.HasSuffix(filename, "_test.go") && !ast.IsGenerated(n)
+		case *ast.CallExpr:
+			if msg, ok := constantMessage(pass, n); ok {
+				occurrences[msg] = append(occurrences[msg], n.Pos())
+			}
 		}
+		return true
 	})
 
 	for msg, positions := range occurrences {
@@ -81,8 +88,7 @@ func run(pass *analysis.Pass) (any, error) {
 }
 
 // constantMessage returns the message string of an errors.New or fmt.Errorf
-// call outside _test.go files whose runtime message is fully determined by a
-// constant argument.
+// call whose runtime message is fully determined by a constant argument.
 func constantMessage(pass *analysis.Pass, call *ast.CallExpr) (string, bool) {
 	if len(call.Args) == 0 {
 		return "", false
@@ -98,10 +104,6 @@ func constantMessage(pass *analysis.Pass, call *ast.CallExpr) (string, bool) {
 	case "fmt.Errorf":
 		isErrorf = true
 	default:
-		return "", false
-	}
-
-	if strings.HasSuffix(pass.Fset.Position(call.Pos()).Filename, "_test.go") {
 		return "", false
 	}
 
