@@ -104,6 +104,7 @@ jobs:
           version: v2.12.2
           plugins:
             - module: github.com/TylerDavidBailey/duperr
+              import: github.com/TylerDavidBailey/duperr/plugin
               path: $GITHUB_WORKSPACE
           EOF
           cd "$RUNNER_TEMP"

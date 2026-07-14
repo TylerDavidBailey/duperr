@@ -64,6 +64,7 @@ Create `.custom-gcl.yml` next to your `.golangci.yml`:
 version: v2.12.2
 plugins:
   - module: github.com/TylerDavidBailey/duperr
+    import: github.com/TylerDavidBailey/duperr/plugin
     version: v0.1.0
 ```
 
@@ -82,6 +83,11 @@ linters:
 ```
 
 Run the built binary (`./custom-gcl` by default) instead of `golangci-lint`.
+
+## AI usage
+
+Parts of this codebase were written with AI assistance (Anthropic's Claude).
+All changes are human-reviewed and covered by the test suite.
 
 ## License
 
