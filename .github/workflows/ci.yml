@@ -10,6 +10,9 @@
 #   plugin — build a custom golangci-lint binary with duperr as a module
 #            plugin (`golangci-lint custom` against the local checkout) and
 #            assert it reports a known duplicate.
+#   ci-ok  — join job that fails unless every job above succeeded. It is the
+#            only status check the protect-main ruleset requires, so the
+#            test matrix can change without touching repo settings.
 #
 # go.mod declares the minimum supported Go version; the test matrix covers
 # the two most recent releases. The golangci-lint version is pinned in the
@@ -148,3 +151,14 @@ jobs:
           cat out.txt
           test "$code" -ne 0
           grep -q 'duplicate error message "smoke duplicate"' out.txt
+
+  ci-ok:
+    name: CI OK
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [test, lint, plugin]
+    if: always()
+    steps:
+      - name: Fail unless every needed job succeeded
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: exit 1
