@@ -1,5 +1,15 @@
 // Package duperr defines an Analyzer that reports duplicate error messages
 // within a package.
+//
+// Two errors constructed from the same message string are indistinguishable
+// when debugging: a log line or test failure carrying the message cannot be
+// traced back to a single call site. The analyzer flags every occurrence
+// after the first of a constant message passed to errors.New or fmt.Errorf,
+// pointing back to the first.
+//
+// fmt.Errorf format strings containing verbs other than %w are skipped:
+// their dynamic arguments already make the resulting messages distinct.
+// Files ending in _test.go and generated files are ignored.
 package duperr
 
 import (
@@ -18,21 +28,25 @@ import (
 	"golang.org/x/tools/go/types/typeutil"
 )
 
-// Analyzer reports duplicate error messages within a package.
-//
-// Two errors constructed from the same message string are indistinguishable
-// when debugging: a log line or test failure carrying the message cannot be
-// traced back to a single call site. The analyzer flags every occurrence
-// after the first of a constant message passed to errors.New or fmt.Errorf.
-//
-// fmt.Errorf format strings containing verbs other than %w are skipped:
-// their dynamic arguments already make the resulting messages distinct.
-// Files ending in _test.go and generated files are ignored.
+const doc = `reports duplicate error messages within a package
+
+Two errors constructed from the same message string are indistinguishable
+when debugging: a log line or test failure carrying the message cannot be
+traced back to a single call site. The analyzer flags every occurrence
+after the first of a constant message passed to errors.New or fmt.Errorf,
+pointing back to the first.
+
+fmt.Errorf format strings containing verbs other than %w are skipped:
+their dynamic arguments already make the resulting messages distinct.
+Files ending in _test.go and generated files are ignored.`
+
+// Analyzer reports duplicate error messages within a package. See the
+// package documentation for details.
 //
 //nolint:gochecknoglobals // analyzers are exported as package-level vars by convention
 var Analyzer = &analysis.Analyzer{
 	Name:     "duperr",
-	Doc:      "reports duplicate error messages within a package",
+	Doc:      doc,
 	URL:      "https://github.com/TylerDavidBailey/duperr",
 	Requires: []*analysis.Analyzer{inspect.Analyzer},
 	Run:      run,

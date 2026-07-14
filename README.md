@@ -18,6 +18,22 @@ a log line or test failure carrying the message cannot be traced back to a
 single call site. Existing linters don't catch this — `dupl` works on code
 fragments, and `goconst` suggests the opposite fix (sharing the string).
 
+Mature codebases accumulate these: duperr reports 20–139 duplicates each in
+Caddy, Hugo, and Prometheus. A typical find, from Hugo's config loader:
+
+```go
+configs, err = fromLoadConfigResult(d.Fs, d.Logger, res)
+if err != nil {
+    return nil, fmt.Errorf("failed to create config from modules config: %w", err)
+}
+if err := configs.transientErr(); err != nil {
+    return nil, fmt.Errorf("failed to create config from modules config: %w", err)
+}
+```
+
+When that message turns up in a log, there is no way to tell which of the
+two calls failed.
+
 ## What it checks
 
 - Constant message strings passed to `errors.New` and `fmt.Errorf`, compared
