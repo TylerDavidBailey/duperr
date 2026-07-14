@@ -1,0 +1,215 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# An opinionated golangci-lint config for idiomatic Go.
+#
+# Every linter is enabled explicitly (`default: none`) and annotated — nothing
+# runs that isn't listed below. A linter earns its place by catching real bugs
+# or enforcing documented Go idiom (Effective Go, Go Code Review Comments,
+# godoc conventions). Style opinions with no idiom behind them are deliberately
+# left out, no matter how popular.
+#
+# Usage: copy this file to your repo root as `.golangci.yml`, then:
+#   golangci-lint run        # lint
+#   golangci-lint run --fix  # lint and apply auto-fixes
+#   golangci-lint fmt        # format
+#
+# Requires golangci-lint v2.x (tested with v2.12.2). No further setup needed:
+# import grouping detects your module path from go.mod automatically.
+#
+# Source: https://github.com/TylerDavidBailey/golangci-lint-config
+# Docs:   https://golangci-lint.run/docs/
+# ─────────────────────────────────────────────────────────────────────────────
+version: "2"
+
+linters:
+  default: none
+  enable:
+    # defaults
+    - errcheck # unchecked errors
+    - govet # suspicious constructs
+    - ineffassign # unused assignments
+    - staticcheck # staticcheck rule set
+    - unused # unused consts, vars, funcs, types
+
+    # bug catchers
+    - asasalint # []any passed as any to variadic
+    - bodyclose # unclosed HTTP response bodies
+    - durationcheck # multiplied durations
+    - errchkjson # unsupported types in json encoding
+    - exhaustive # missing enum switch cases
+    - fatcontext # nested contexts in loops
+    - forcetypeassert # unguarded type assertions
+    - gocheckcompilerdirectives # malformed //go: directives
+    - gochecksumtype # sum-type switch exhaustiveness
+    - makezero # append to non-zero-length make
+    - musttag # missing struct tags in (un)marshal
+    - nilerr # nil return after err != nil check
+    - nilnesserr # wrong nil err returned
+    - nilnil # nil error with invalid value
+    - nosprintfhostport # Sprintf host:port breaks IPv6
+    - reassign # reassigned package variables
+    - rowserrcheck # unchecked rows.Err
+    - spancheck # unended OTel spans
+    - sqlclosecheck # unclosed sql.Rows/Stmt
+    - wastedassign # wasted assignments
+
+    # idiom & convention
+    - canonicalheader # canonical net/http.Header keys
+    - containedctx # context.Context struct fields
+    - copyloopvar # obsolete loop-var copies (Go 1.22+)
+    - errname # ErrFoo / FooError naming
+    - errorlint # errors.Is/As and %w wrapping
+    - exptostd # x/exp funcs with std replacements
+    - gochecknoglobals # global variables
+    - gochecknoinits # init functions
+    - gocognit # cognitive complexity
+    - goconst # repeated strings that could be consts
+    - gocritic # bug/perf/style diagnostics
+    - goprintffuncname # printf-like funcs end in f
+    - iface # interface pollution
+    - inamedparam # unnamed interface method params
+    - interfacebloat # oversized interfaces
+    - intrange # for i := range n loops
+    - mirror # needless bytes/string conversions
+    - modernize # modern language and library features
+    - nakedret # naked returns in long funcs
+    - noctx # missing context.Context usage
+    - perfsprint # faster fmt.Sprintf alternatives
+    - predeclared # shadowed predeclared identifiers
+    - recvcheck # mixed receiver types
+    - revive # golint successor
+    - unconvert # unnecessary type conversions
+    - unparam # unused function parameters
+    - usestdlibvars # stdlib consts over magic literals
+    - wrapcheck # unwrapped errors from external packages
+
+    # logging
+    - loggercheck # logger key/value pairs
+    - sloglint # consistent log/slog usage
+    - zerologlint # zerolog without Msg/Send
+
+    # tests
+    - testableexamples # examples without expected output
+    - testifylint # testify assertion usage
+    - thelper # test helpers without t.Helper
+    - tparallel # incorrect t.Parallel usage
+    - usetesting # t.TempDir/t.Setenv/t.Context
+
+    # comments, docs & hygiene
+    - asciicheck # non-ASCII identifiers
+    - bidichk # dangerous unicode sequences
+    - dupword # duplicate words in comments
+    - godot # comments end in a period
+    - gomoddirectives # replace/retract/exclude in go.mod
+    - iotamixing # iota mixed with explicit consts
+    - misspell # misspelled words
+    - nolintlint # ill-formed nolint directives
+    - whitespace # stray blank lines at block edges
+
+    # security
+    - gosec # security issues
+
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+
+    gocognit:
+      min-complexity: 20
+
+    goconst:
+      min-occurrences: 3
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        - hugeParam # flags ordinary value passing
+        - rangeValCopy # flags ordinary value passing
+        - unnamedResult # named returns are fine; nakedret polices the hazard
+        - whyNoLint # duplicates nolintlint require-explanation
+
+    gosec:
+      excludes:
+        - G104 # duplicates errcheck
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # memory layout over logical field grouping
+        - shadow # too noisy; predeclared covers the dangerous cases
+
+    iface:
+      enable:
+        - identical
+        - unused
+
+    misspell:
+      locale: US
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+    revive:
+      enable-default-rules: true
+      rules:
+        - name: comment-spacings
+        - name: datarace
+        - name: early-return
+        - name: package-comments
+          disabled: true # package comments not required
+        - name: redundant-import-alias
+        - name: superfluous-else
+        - name: use-errors-new
+
+    rowserrcheck:
+      packages:
+        - github.com/jmoiron/sqlx
+
+    staticcheck:
+      checks:
+        - all # defaults skip the ST doc and naming conventions
+        - -ST1000 # package comments not required
+
+    testifylint:
+      enable-all: true
+
+    usetesting:
+      context-background: true
+      context-todo: true
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gochecknoglobals # test fixtures
+          - goconst # repeated literals are fine in tests
+          - gosec # hardcoded creds, weak rand are fine in tests
+
+formatters:
+  enable:
+    - gci # deterministic import ordering
+    - gofumpt # stricter gofmt
+    - goimports # add/remove imports
+    - golines # wrap long lines
+    - swaggo # format swaggo comments
+
+  settings:
+    gci:
+      custom-order: true
+      sections:
+        - standard
+        - default
+        - localmodule
+
+    gofumpt:
+      extra-rules: true
+
+    golines:
+      max-len: 120
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  uniq-by-line: false

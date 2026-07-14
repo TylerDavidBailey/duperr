@@ -1,0 +1,164 @@
+# ──────────────────────────────────────────────────────────────────────────
+# CI for duperr.
+#
+# Jobs:
+#   test   — on oldstable and stable Go: build all packages, check go.mod is
+#            tidy, run the analysistest suite with the race detector, then
+#            smoke-test the compiled vettool by running it on this repository
+#            via `go vet`.
+#   lint   — golangci-lint with the dogfooded config in .golangci.yml.
+#   plugin — build a custom golangci-lint binary with duperr as a module
+#            plugin (`golangci-lint custom` against the local checkout) and
+#            assert it reports a known duplicate.
+#   ci-ok  — join job that fails unless every job above succeeded. It is the
+#            only status check the protect-main ruleset requires, so the
+#            test matrix can change without touching repo settings.
+#
+# go.mod declares the minimum supported Go version; the test matrix covers
+# the two most recent releases. The golangci-lint version is pinned in the
+# lint and plugin jobs — bump both together.
+# ──────────────────────────────────────────────────────────────────────────
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (${{ matrix.go }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        go: [oldstable, stable]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Build all packages
+        run: go build ./...
+
+      - name: Check go.mod is tidy
+        run: go mod tidy -diff
+
+      - name: Run tests
+        run: go test -race -shuffle=on ./...
+
+      - name: Smoke-test the vettool on this repository
+        run: |
+          go build -o "$RUNNER_TEMP/duperr" ./cmd/duperr
+          go vet -vettool="$RUNNER_TEMP/duperr" ./...
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2
+
+  plugin:
+    name: Plugin
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh \
+            | sh -s -- -b "$RUNNER_TEMP/bin" v2.12.2
+
+      - name: Build custom golangci-lint binary with the duperr plugin
+        run: |
+          cat > "$RUNNER_TEMP/.custom-gcl.yml" <<EOF
+          version: v2.12.2
+          plugins:
+            - module: github.com/TylerDavidBailey/duperr
+              import: github.com/TylerDavidBailey/duperr/plugin
+              path: $GITHUB_WORKSPACE
+          EOF
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/bin/golangci-lint" custom
+
+      - name: Assert the plugin reports a known duplicate
+        run: |
+          mkdir "$RUNNER_TEMP/smoke"
+          cd "$RUNNER_TEMP/smoke"
+          cat > go.mod <<'EOF'
+          module smoke
+
+          go 1.25.0
+          EOF
+          cat > smoke.go <<'EOF'
+          package smoke
+
+          import "errors"
+
+          var (
+          	ErrA = errors.New("smoke duplicate")
+          	ErrB = errors.New("smoke duplicate")
+          )
+          EOF
+          cat > golangci.yml <<'EOF'
+          version: "2"
+          linters:
+            default: none
+            enable:
+              - duperr
+            settings:
+              custom:
+                duperr:
+                  type: module
+                  description: reports duplicate error messages within a package
+          EOF
+          set +e
+          "$RUNNER_TEMP/custom-gcl" run -c golangci.yml ./... > out.txt 2>&1
+          code=$?
+          set -e
+          cat out.txt
+          test "$code" -ne 0
+          grep -q 'duplicate error message "smoke duplicate"' out.txt
+
+  ci-ok:
+    name: CI OK
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [test, lint, plugin]
+    if: always()
+    steps:
+      - name: Fail unless every needed job succeeded
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: exit 1
