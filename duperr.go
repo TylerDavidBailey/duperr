@@ -61,7 +61,15 @@ func run(pass *analysis.Pass) (any, error) {
 		if len(positions) < 2 {
 			continue
 		}
-		slices.Sort(positions)
+		// Raw token.Pos order follows file registration order, which is
+		// not deterministic across loads; sort by resolved position.
+		slices.SortFunc(positions, func(a, b token.Pos) int {
+			pa, pb := pass.Fset.Position(a), pass.Fset.Position(b)
+			if c := strings.Compare(pa.Filename, pb.Filename); c != 0 {
+				return c
+			}
+			return pa.Offset - pb.Offset
+		})
 		first := pass.Fset.Position(positions[0])
 		firstLoc := fmt.Sprintf("%s:%d", filepath.Base(first.Filename), first.Line)
 		for _, pos := range positions[1:] {
