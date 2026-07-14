@@ -83,11 +83,6 @@ linters:
 
 Run the built binary (`./custom-gcl` by default) instead of `golangci-lint`.
 
-## See also
-
-[golangci-lint-config](https://github.com/TylerDavidBailey/golangci-lint-config) —
-the opinionated golangci-lint config this repo dogfoods.
-
 ## License
 
 [MIT](LICENSE)
