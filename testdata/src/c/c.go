@@ -23,8 +23,25 @@ var (
 
 var (
 	errPct1 = fmt.Errorf("100%% duplicated")
-	errPct2 = fmt.Errorf("100%% duplicated") // want `duplicate error message "100%% duplicated" \(first used at c\.go:25\)`
+	errPct2 = fmt.Errorf("100%% duplicated") // want `duplicate error message "100% duplicated" \(first used at c\.go:25\)`
 )
+
+// Messages compare by their runtime text: %% in a fmt.Errorf format renders
+// as a single percent sign, so it matches the unescaped errors.New literal
+// but not the escaped one.
+var (
+	errUnescaped = errors.New("75% literal")
+	errEscaped   = fmt.Errorf("75%% literal") // want `duplicate error message "75% literal" \(first used at c\.go:33\)`
+	errTwoPct    = errors.New("75%% literal")
+)
+
+// A literal %w in errors.New stays literal at runtime, so it never matches
+// the fmt.Errorf wrap template sharing its source text.
+var errLiteralVerb = errors.New("literal wrap: %w")
+
+func wrapLiteralVerb(err error) error {
+	return fmt.Errorf("literal wrap: %w", err)
+}
 
 var (
 	errBare1 = fmt.Errorf("50%")
@@ -36,7 +53,7 @@ func wrapIndexed(err error) error {
 }
 
 func wrapIndexedAgain(err error) error {
-	return fmt.Errorf("indexed wrap: %[1]w", err) // want `duplicate error message "indexed wrap: %\[1\]w" \(first used at c\.go:35\)`
+	return fmt.Errorf("indexed wrap: %[1]w", err) // want `duplicate error message "indexed wrap: %\[1\]w" \(first used at c\.go:52\)`
 }
 
 type fakeErrors struct{}

@@ -59,7 +59,7 @@ func run(pass *analysis.Pass) (any, error) {
 		return nil, fmt.Errorf("getting inspector result for %s", pass.Pkg.Path())
 	}
 
-	occurrences := map[string][]token.Pos{}
+	occurrences := map[message][]token.Pos{}
 
 	nodeFilter := []ast.Node{(*ast.File)(nil), (*ast.CallExpr)(nil)}
 	insp.Nodes(nodeFilter, func(n ast.Node, push bool) bool {
@@ -94,23 +94,32 @@ func run(pass *analysis.Pass) (any, error) {
 		first := pass.Fset.Position(positions[0])
 		firstLoc := fmt.Sprintf("%s:%d", filepath.Base(first.Filename), first.Line)
 		for _, pos := range positions[1:] {
-			pass.Reportf(pos, "duplicate error message %q (first used at %s)", msg, firstLoc)
+			pass.Reportf(pos, "duplicate error message %q (first used at %s)", msg.text, firstLoc)
 		}
 	}
 
 	return nil, nil
 }
 
-// constantMessage returns the message string of an errors.New or fmt.Errorf
-// call whose runtime message is fully determined by a constant argument.
-func constantMessage(pass *analysis.Pass, call *ast.CallExpr) (string, bool) {
+// message identifies an error message by what it produces at runtime: the
+// message text with fmt.Errorf's %% escapes resolved, plus whether it is a
+// wrap template. errors.New("x: %w") and fmt.Errorf("x: %w", err) share
+// source text but can never produce the same runtime message.
+type message struct {
+	wraps bool // fmt.Errorf format containing %w
+	text  string
+}
+
+// constantMessage returns the message of an errors.New or fmt.Errorf call
+// whose runtime message is fully determined by a constant argument.
+func constantMessage(pass *analysis.Pass, call *ast.CallExpr) (message, bool) {
 	if len(call.Args) == 0 {
-		return "", false
+		return message{}, false
 	}
 
 	fn, ok := typeutil.Callee(pass.TypesInfo, call).(*types.Func)
 	if !ok {
-		return "", false
+		return message{}, false
 	}
 	isErrorf := false
 	switch fn.FullName() {
@@ -118,25 +127,30 @@ func constantMessage(pass *analysis.Pass, call *ast.CallExpr) (string, bool) {
 	case "fmt.Errorf":
 		isErrorf = true
 	default:
-		return "", false
+		return message{}, false
 	}
 
 	tv := pass.TypesInfo.Types[call.Args[0]]
 	if tv.Value == nil || tv.Value.Kind() != constant.String {
-		return "", false
+		return message{}, false
 	}
 	msg := constant.StringVal(tv.Value)
-	if isErrorf && hasDynamicVerbs(msg) {
-		return "", false
+	if !isErrorf {
+		return message{text: msg}, true
+	}
+	dynamic, wraps := scanVerbs(msg)
+	if dynamic {
+		return message{}, false
 	}
 
-	return msg, true
+	return message{wraps: wraps, text: strings.ReplaceAll(msg, "%%", "%")}, true
 }
 
-// hasDynamicVerbs reports whether format contains a formatting verb other
-// than %w. Such verbs consume dynamic arguments, so call sites sharing the
-// format string still produce distinct messages at runtime.
-func hasDynamicVerbs(format string) bool {
+// scanVerbs reports whether format contains a formatting verb other than %w
+// (such verbs consume dynamic arguments, so call sites sharing the format
+// string still produce distinct messages at runtime) and whether it contains
+// %w itself.
+func scanVerbs(format string) (dynamic, wraps bool) {
 	for i := 0; i < len(format); i++ {
 		if format[i] != '%' {
 			continue
@@ -146,13 +160,16 @@ func hasDynamicVerbs(format string) bool {
 			i++
 		}
 		if i >= len(format) {
-			return true // trailing bare % is malformed; play it safe
+			return true, wraps // trailing bare % is malformed; play it safe
 		}
 		switch format[i] {
-		case '%', 'w':
+		case '%':
+		case 'w':
+			wraps = true
 		default:
-			return true
+			return true, wraps
 		}
 	}
-	return false
+
+	return false, wraps
 }
