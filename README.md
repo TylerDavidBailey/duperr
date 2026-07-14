@@ -1,5 +1,10 @@
 # duperr
 
+[![CI](https://github.com/TylerDavidBailey/duperr/actions/workflows/ci.yml/badge.svg)](https://github.com/TylerDavidBailey/duperr/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/TylerDavidBailey/duperr.svg)](https://pkg.go.dev/github.com/TylerDavidBailey/duperr)
+[![Go Report Card](https://goreportcard.com/badge/github.com/TylerDavidBailey/duperr)](https://goreportcard.com/report/github.com/TylerDavidBailey/duperr)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A Go linter that reports duplicate error messages within a package.
 
 ```go
@@ -21,7 +26,7 @@ fragments, and `goconst` suggests the opposite fix (sharing the string).
 - `fmt.Errorf` format strings are only compared when they contain no verbs
   besides `%w` — dynamic verbs (`%s`, `%d`, …) already make the resulting
   messages distinct at runtime.
-- Files ending in `_test.go` are skipped.
+- Files ending in `_test.go` and generated files are skipped.
 
 Every occurrence after the first is reported, pointing back to the first.
 
@@ -43,7 +48,7 @@ Create `.custom-gcl.yml` next to your `.golangci.yml`:
 version: v2.12.2
 plugins:
   - module: github.com/TylerDavidBailey/duperr
-    version: latest
+    version: v0.1.0
 ```
 
 Build the custom binary once with `golangci-lint custom`, then enable the
