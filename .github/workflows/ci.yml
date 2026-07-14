@@ -1,3 +1,14 @@
+# ──────────────────────────────────────────────────────────────────────────
+# CI for duperr.
+#
+# Jobs:
+#   test — build all packages, check go.mod is tidy, run the analysistest
+#          suite with the race detector, then smoke-test the compiled
+#          vettool by running it on this repository via `go vet`.
+#   lint — golangci-lint with the dogfooded config in .golangci.yml.
+#
+# The Go version comes from go.mod so it is bumped in exactly one place.
+# ──────────────────────────────────────────────────────────────────────────
 name: CI
 
 on:
@@ -8,23 +19,54 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          go-version: stable
-      - run: go test ./...
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Build all packages
+        run: go build ./...
+
+      - name: Check go.mod is tidy
+        run: go mod tidy -diff
+
+      - name: Run tests
+        run: go test -race -shuffle=on ./...
+
+      - name: Smoke-test the vettool on this repository
+        run: |
+          go build -o "$RUNNER_TEMP/duperr" ./cmd/duperr
+          go vet -vettool="$RUNNER_TEMP/duperr" ./...
 
   lint:
+    name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          go-version: stable
-      - uses: golangci/golangci-lint-action@v8
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
         with:
           version: v2.12.2
